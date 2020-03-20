@@ -7,11 +7,23 @@ import datetime
 from PIL import Image, ImageDraw, ImageFont
 from enum import Enum
 
+"""
+    Me falta hacer JSON serializable la clase status para exportar
+    el diccionario, esto solo hace falta de cara a poder recuperar
+    el juego. 
+"""
+
 class Status(Enum):
     DEAD = 0
     ILL = 1
     HEALTHY = 2
 
+"""
+    There are 3 types of round
+    0) Infect
+    1) Dead
+    2) Kill
+"""
 class Round(Enum):
     INFECT = 0
     ILL_DEAD = 1
@@ -20,46 +32,19 @@ class Round(Enum):
 LOWHOUR = 2
 HIGHHOUR = 9
 TYPES_OF_ROUND = 3
-"""
-    There are 3 types of round
-    1) Infected
-    2) Dead
-    3) Kill
-"""
-
-
-# Python program to illustrate the intersection 
-# of two lists using set() method 
-def intersection(lst1, lst2): 
-    return list(set(lst1) & set(lst2)) 
-
-def createFollowersList(user_string):
-    try:
-        followers = []
-        for follower in tweepy.Cursor(api.followers, screen_name=user_string).items():
-            followers.append(follower.screen_name)
-            print(follower.screen_name)
-            time.sleep(1)
-
-        following = []
-        for follower in tweepy.Cursor(api.friends, screen_name=user_string).items():
-            following.append(follower.screen_name)
-            print(follower.screen_name)
-            time.sleep(1)
-        # followers = [friend.screen_name for friend in user.followers]
-        # following = [friend.screen_name for friend in user.friends()]
-    except tweepy.error.RateLimitError:
-        print("Problemas con la api")
-        pass
-    return intersection(followers, following)
+MAX_INFECT_ROUND = 3
+MIN_ITERATION_OPENING = 5
+NUM_ALEA_DEAD = 2
 
 def createGameObject(followers):
     dictionary = dict()
     # Initialices the dictionary with all the followers and 
     for follower in followers:
-        dictionary[follower] = True
+        dictionary[follower] = Status.HEALTHY
+    """
     with open("game_objects/followers_game.txt", "w") as json_file:
         json_file.write(json.dumps(dictionary))
+    """
     return dictionary
 
 
@@ -95,39 +80,80 @@ def playGame(dictionary):
         print("Enhorabuena has ganado los juegos de Cherra")
 
 def playCoronaGame(dictionary, iteration):
-    numInfected = sum(dictionary.values() == Status.ILL)
+    numInfected = sum(map(lambda x: x == Status.ILL,dictionary.values()))
+    numAlive = sum(map(lambda x: x == (Status.ILL or Status.HEALTHY),dictionary.values()))
     typeOfRound = None
     if(numInfected == 0):
         typeOfRound = Round.INFECT
     else:
-        typeOfRound = random.randint(0, TYPES_OF_ROUND-1)
+        if(iteration <= MIN_ITERATION_OPENING):
+            typeOfRound = 0
+        elif(numAlive <= numInfected + MIN_ITERATION_OPENING):
+            typeOfRound = random.randint(1, TYPES_OF_ROUND-1)
+        else:
+            typeOfRound = random.randint(0, TYPES_OF_ROUND-1)
     # This switch plays the round game
-    switchRoundMode(typeOfRound, dictionary)
+    switchRoundMode(typeOfRound, dictionary, iteration)
     printImageCoronaGame(dictionary, iteration)
     return finalRoundChecker(dictionary)
 
-def infectRoundMode(dictionary):
-    x = random.randint(0, len(dictionary)-1)
-    while(list(dictionary.values())[x] != Status.HEALTHY):
+def infectRoundMode(dictionary, iteration):
+    numInfected = sum(map(lambda x: x == Status.ILL,dictionary.values()))
+    if(numInfected == 0):
         x = random.randint(0, len(dictionary)-1)
-    dictionary[x] = Status.ILL
-    print("El usuario @" + list(dictionary.keys())[x] + "se ha infectado del coronavirus")
+        print(list(dictionary.values()))
+        while(list(dictionary.values())[x] != Status.HEALTHY):
+            x = random.randint(0, len(dictionary)-1)
+        dictionary[list(dictionary.keys())[x]] = Status.ILL
+        print("El usuario @" + list(dictionary.keys())[x] + " se ha infectado del coronavirus")
+    else:
+        infecta = random.randint(0, len(dictionary)-1)
+        while(list(dictionary.values())[infecta] != Status.ILL):
+            infecta = random.randint(0, len(dictionary)-1)
+        numInfected = random.randint(1, MAX_INFECT_ROUND)
+        infectados = []
+        while(len(infectados) < numInfected):
+            infectado = random.randint(0, len(dictionary)-1)
+            while(list(dictionary.values())[infectado] != Status.HEALTHY):
+                infectado = random.randint(0, len(dictionary)-1)
+            print(infectado)
+            infectados.append(infectado)
+        print("El usuario @" + list(dictionary.keys())[infecta] + " ha infectado a: ")
+        for person in infectados:
+            dictionary[list(dictionary.keys())[person]] = Status.ILL
+            print("@" + list(dictionary.keys())[person])
 
-def illDeadRoundMode(dictionary):
-    x = random.randint(0, len(dictionary)-1)
 
-def killRoundMode(dictionary):
-    print("kill")
+def illDeadRoundMode(dictionary, iteration):
+    numInfected = sum(map(lambda x: x == Status.ILL,dictionary.values()))
+    numDeadThisRandom = random.randint(0, min(NUM_ALEA_DEAD, numInfected-1))
+    dead = random.randint(0, len(dictionary)-1)
+    while(list(dictionary.values())[dead] != Status.ILL):
+        dead = random.randint(0, len(dictionary)-1)
+    dictionary[list(dictionary.keys())[dead]] = Status.DEAD
+    print("El usuario @" + list(dictionary.keys())[dead] + " murió de coronavirus")
+    if(numDeadThisRandom > 0):
+        for count in range(0,numDeadThisRandom-1):
+            dead = random.randint(0, len(dictionary)-1)
+        if(list(dictionary.values())[dead] == Status.ILL):
+            dictionary[list(dictionary.keys())[dead]] = Status.DEAD
+            print("El usuario @" + list(dictionary.keys())[dead] + " murió de coronavirus")
     
-def switchRoundMode(mode, dictionary):
+
+
+def killRoundMode(dictionary, iteration):
+    print("Kill")
+
+
+def switchRoundMode(mode, dictionary, iteration):
     switcher = {
-        0: infectRoundMode(dictionary),
-        1: illDeadRoundMode(dictionary),
-        2: killRoundMode(dictionary)
+        0: infectRoundMode(dictionary, iteration),
+        1: illDeadRoundMode(dictionary, iteration),
+        2: killRoundMode(dictionary, iteration)
     }
 
 def finalRoundChecker(dictionary):
-    numAlive = sum(dictionary.values() == (Status.HEALTHY or Status.ILL))
+    numAlive = sum(map(lambda x: x == (Status.HEALTHY or Status.ILL),dictionary.values()))
     return numAlive == 1
 
 """
@@ -171,12 +197,16 @@ def printImageCoronaGame(dictionary, iteration):
     fnt = ImageFont.truetype('/Library/Fonts/arial.ttf', fontsize)
 
     for i in range(0, len(words)):
+        """
         if values[i] == Status.ILL:
-            d.text((seedx,seedy), words[i], font = fnt, fill=(24,101,25))
-        elif values[i] == Status.HEALTHY:
             d.text((seedx,seedy), words[i], font = fnt, fill=(0,0,0))
+        """
+        if values[i] == Status.HEALTHY:
+            d.text((seedx,seedy), words[i], font = fnt, fill=(0,0,0))
+        """
         else:
             d.text((seedx,seedy), words[i], font = fnt, fill=(255,0,0))
+        """
         if seedy + fontsize + 30 > imgy :
             seedy = 10 
             seedx = seedx + marginleft
@@ -196,25 +226,27 @@ def saveDictionary(dictionary):
 def main():
     # followers = createFollowersList("JoserraCasero")
     # Authenticate to Twitter
-    auth = tweepy.OAuthHandler("CONSUMER API KEY", "CONSUMER API KEY SECRET")
-    auth.set_access_token("ACCESS TOKEN", "ACCES TOKEN SECRET")
+    # auth = tweepy.OAuthHandler("CONSUMER API KEY", "CONSUMER API KEY SECRET")
+    # auth.set_access_token("ACCESS TOKEN", "ACCES TOKEN SECRET")
     # Create API object
-    api = tweepy.API(auth)
+    # api = tweepy.API(auth)
     followers = importFollowers()
-    createGameObject(followers)
-    dictionary = importGameObject()
-    saveDictionary(dictionary)
+    dictionary = createGameObject(followers)
+    #dictionary = importGameObject()
+    #saveDictionary(dictionary)
     iteration = 0
     img = printImageCoronaGame(dictionary, 0)
     endGame = False
     while(not(endGame)):
         #print(datetime.datetime.now().hour)
-        # if(datetime.datetime.now().hour < LOWHOUR or datetime.datetime.now().hour > HIGHHOUR):
-        # playGameOnline(api, dictionary)
-        endGame = playCoronaGame(dictionary, 0)
-        # printImage(dictionary)
-        saveDictionary(dictionary)
+        #if(datetime.datetime.now().hour < LOWHOUR or datetime.datetime.now().hour > HIGHHOUR):
+        #playGameOnline(api, dictionary)
+        endGame = playCoronaGame(dictionary, iteration)
+        #printImage(dictionary)
+        #saveDictionary(dictionary)
+        iteration += 1
         #time.sleep(1800)
+
 
 if __name__== "__main__":
     main()
