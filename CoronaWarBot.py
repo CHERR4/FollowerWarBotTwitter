@@ -81,42 +81,44 @@ def playGame(dictionary):
 
 def playCoronaGame(dictionary, iteration):
     numInfected = sum(map(lambda x: x == Status.ILL,dictionary.values()))
-    numAlive = sum(map(lambda x: x == (Status.ILL or Status.HEALTHY),dictionary.values()))
+    numAlive = sum(map(lambda x: (x == Status.ILL) or ( x == Status.HEALTHY),dictionary.values()))
     typeOfRound = None
+    print("numInfected " + str(numInfected))
+    print("numAlive: " + str(numAlive))
     if(numInfected == 0):
         typeOfRound = Round.INFECT
     else:
         if(iteration <= MIN_ITERATION_OPENING):
-            typeOfRound = 0
-        elif(numAlive <= numInfected + MIN_ITERATION_OPENING):
+            typeOfRound = Round.INFECT
+        elif(numAlive == numInfected):
             typeOfRound = random.randint(1, TYPES_OF_ROUND-1)
         else:
             typeOfRound = random.randint(0, TYPES_OF_ROUND-1)
     # This switch plays the round game
-    switchRoundMode(typeOfRound, dictionary, iteration)
+    switchRoundMode(Round(typeOfRound), dictionary)
     printImageCoronaGame(dictionary, iteration)
     return finalRoundChecker(dictionary)
 
-def infectRoundMode(dictionary, iteration):
+def infectRoundMode(dictionary):
     numInfected = sum(map(lambda x: x == Status.ILL,dictionary.values()))
+    numAlive = sum(map(lambda x: x == Status.HEALTHY,dictionary.values()))
     if(numInfected == 0):
         x = random.randint(0, len(dictionary)-1)
         print(list(dictionary.values()))
         while(list(dictionary.values())[x] != Status.HEALTHY):
             x = random.randint(0, len(dictionary)-1)
         dictionary[list(dictionary.keys())[x]] = Status.ILL
-        print("El usuario @" + list(dictionary.keys())[x] + " se ha infectado del coronavirus")
+        print("PRIMER INFECTADO: El usuario @" + list(dictionary.keys())[x] + " se ha infectado del coronavirus")
     else:
         infecta = random.randint(0, len(dictionary)-1)
         while(list(dictionary.values())[infecta] != Status.ILL):
             infecta = random.randint(0, len(dictionary)-1)
-        numInfected = random.randint(1, MAX_INFECT_ROUND)
+        numInfected = random.randint(1, min(MAX_INFECT_ROUND, numAlive))
         infectados = []
         while(len(infectados) < numInfected):
             infectado = random.randint(0, len(dictionary)-1)
-            while(list(dictionary.values())[infectado] != Status.HEALTHY):
+            while(list(dictionary.values())[infectado] != Status.HEALTHY or infectado in infectados):
                 infectado = random.randint(0, len(dictionary)-1)
-            print(infectado)
             infectados.append(infectado)
         print("El usuario @" + list(dictionary.keys())[infecta] + " ha infectado a: ")
         for person in infectados:
@@ -124,7 +126,7 @@ def infectRoundMode(dictionary, iteration):
             print("@" + list(dictionary.keys())[person])
 
 
-def illDeadRoundMode(dictionary, iteration):
+def illDeadRoundMode(dictionary):
     numInfected = sum(map(lambda x: x == Status.ILL,dictionary.values()))
     numDeadThisRandom = random.randint(0, min(NUM_ALEA_DEAD, numInfected-1))
     dead = random.randint(0, len(dictionary)-1)
@@ -141,19 +143,28 @@ def illDeadRoundMode(dictionary, iteration):
     
 
 
-def killRoundMode(dictionary, iteration):
-    print("Kill")
+def killRoundMode(dictionary):
+    x = random.randint(0, len(dictionary)-1)
+    while(list(dictionary.values())[x] != (Status.ILL or Status.HEALTHY)):
+        x = random.randint(0, len(dictionary)-1)
+    if(list(dictionary.values())[x] == Status.HEALTHY):
+        print("El usuario " + list(dictionary.keys())[x] + " se suicidó no podía más con la cuarentena en casa")
+    else:
+        print("El usuario " + list(dictionary.keys())[x] + " lo mató la desesperación, viendo que el COVID no lo mataba")
 
 
-def switchRoundMode(mode, dictionary, iteration):
+def switchRoundMode(mode, dictionary):
+    print("Mode: " + str(mode))
     switcher = {
-        0: infectRoundMode(dictionary, iteration),
-        1: illDeadRoundMode(dictionary, iteration),
-        2: killRoundMode(dictionary, iteration)
+        Round.INFECT or 0: lambda: infectRoundMode(dictionary),
+        Round.ILL_DEAD or 1: lambda: illDeadRoundMode(dictionary),
+        Round.KILL or 2: lambda: killRoundMode(dictionary)
     }
+    return switcher.get(mode, lambda : "Type of round not valid")()
+
 
 def finalRoundChecker(dictionary):
-    numAlive = sum(map(lambda x: x == (Status.HEALTHY or Status.ILL),dictionary.values()))
+    numAlive = sum(map(lambda x: (x == Status.HEALTHY) or (x == Status.ILL),dictionary.values()))
     return numAlive == 1
 
 """
@@ -197,16 +208,13 @@ def printImageCoronaGame(dictionary, iteration):
     fnt = ImageFont.truetype('/Library/Fonts/arial.ttf', fontsize)
 
     for i in range(0, len(words)):
-        """
         if values[i] == Status.ILL:
+            d.text((seedx,seedy), words[i], font = fnt, fill=(24,101,25))
+        elif values[i] == Status.HEALTHY:
             d.text((seedx,seedy), words[i], font = fnt, fill=(0,0,0))
-        """
-        if values[i] == Status.HEALTHY:
-            d.text((seedx,seedy), words[i], font = fnt, fill=(0,0,0))
-        """
         else:
             d.text((seedx,seedy), words[i], font = fnt, fill=(255,0,0))
-        """
+
         if seedy + fontsize + 30 > imgy :
             seedy = 10 
             seedx = seedx + marginleft
